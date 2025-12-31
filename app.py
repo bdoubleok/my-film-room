@@ -8,20 +8,12 @@ st.set_page_config(page_title="CFB/Madden Film Room", layout="wide")
 
 st.title("🏈 Scheme Lab: Film Review")
 
-# 1. Mock Data (This would be replaced by your OCR script output)
-data = {
-    'Formation': ['Gun Bunch', 'Gun Bunch', 'Trip Left', 'I-Form Pro', 'Gun Bunch'],
-    'Play Name': ['Verticals', 'HB Base', 'Crossers', 'Stretch', 'Verticals'],
-    'Down': [1, 2, 3, 1, 3],
-    'Distance': [10, 6, 4, 10, 8],
-    'Yards Gained': [12, 2, 5, -1, 15],
-    'Twitch_Link': [
-        'https://twitch.tv/videos/123?t=0h10m05s',
-        'https://twitch.tv/videos/123?t=0h12m10s',
-        'https://twitch.tv/videos/123?t=0h15m30s',
-        'https://twitch.tv/videos/123?t=0h18m45s',
-        'https://twitch.tv/videos/123?t=0h22m00s'
-    ]
+# Replace the mock data section with this once you have your CSV
+try:
+    df = pd.read_csv("stats.csv")
+except FileNotFoundError:
+    st.error("Stats file not found. Please upload 'stats.csv' to your GitHub repo.")
+    st.stop()
 }
 df = pd.DataFrame(data)
 
