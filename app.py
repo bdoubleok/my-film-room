@@ -9,12 +9,12 @@ st.set_page_config(page_title="CFB/Madden Film Room", layout="wide")
 st.title("🏈 Scheme Lab: Film Review")
 
 # Replace the mock data section with this once you have your CSV
-try:
-    df = pd.read_csv("stats.csv")
-except FileNotFoundError:
-    st.error("Stats file not found. Please upload 'stats.csv' to your GitHub repo.")
+uploaded_file = st.file_uploader("Upload your stats.csv file", type="csv")
+if uploaded_file:
+    df = pd.read_csv(uploaded_file)
+else:
+    st.error("Stats file not uploaded. Please upload the file.")
     st.stop()
-df = pd.DataFrame(data)
 
 # Defensive: coerce numeric fields and fill/handle missing values
 for col in ['Down', 'Distance', 'Yards Gained']:
