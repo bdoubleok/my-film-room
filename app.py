@@ -14,7 +14,6 @@ try:
 except FileNotFoundError:
     st.error("Stats file not found. Please upload 'stats.csv' to your GitHub repo.")
     st.stop()
-}
 df = pd.DataFrame(data)
 
 # Defensive: coerce numeric fields and fill/handle missing values
