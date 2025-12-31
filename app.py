@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 # Set Page Config for Mobile
+# NOTE: set_page_config must be called before any other Streamlit UI calls.
 st.set_page_config(page_title="CFB/Madden Film Room", layout="wide")
 
 st.title("🏈 Scheme Lab: Film Review")
@@ -14,43 +15,109 @@ data = {
     'Down': [1, 2, 3, 1, 3],
     'Distance': [10, 6, 4, 10, 8],
     'Yards Gained': [12, 2, 5, -1, 15],
-    'Twitch_Link': ['https://twitch.tv/videos/123?t=0h10m05s', 'https://twitch.tv/videos/123?t=0h12m10s', 
-                    'https://twitch.tv/videos/123?t=0h15m30s', 'https://twitch.tv/videos/123?t=0h18m45s', 
-                    'https://twitch.tv/videos/123?t=0h22m00s']
+    'Twitch_Link': [
+        'https://twitch.tv/videos/123?t=0h10m05s',
+        'https://twitch.tv/videos/123?t=0h12m10s',
+        'https://twitch.tv/videos/123?t=0h15m30s',
+        'https://twitch.tv/videos/123?t=0h18m45s',
+        'https://twitch.tv/videos/123?t=0h22m00s'
+    ]
 }
 df = pd.DataFrame(data)
 
+# Defensive: coerce numeric fields and fill/handle missing values
+for col in ['Down', 'Distance', 'Yards Gained']:
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+# Replace NaNs with safe defaults (you might want to handle differently)
+df['Down'] = df['Down'].fillna(1).astype(int)
+df['Distance'] = df['Distance'].fillna(0).astype(float)
+df['Yards Gained'] = df['Yards Gained'].fillna(0).astype(float)
+
 # 2. Success Logic Formula
 def check_success(row):
-    if row['Down'] == 1: return row['Yards Gained'] >= (row['Distance'] * 0.5)
-    if row['Down'] == 2: return row['Yards Gained'] >= (row['Distance'] * 0.7)
-    return row['Yards Gained'] >= row['Distance']
+    # returns boolean
+    down = int(row['Down'])
+    distance = row['Distance']
+    gained = row['Yards Gained']
+    if down == 1:
+        return gained >= (distance * 0.5)
+    if down == 2:
+        return gained >= (distance * 0.7)
+    return gained >= distance
 
 df['Success'] = df.apply(check_success, axis=1)
 
 # 3. Mobile-Friendly Metrics
-col1, col2 = st.columns(2)
-success_rate = (df['Success'].sum() / len(df)) * 100
+col1, col2, col3 = st.columns(3)
+success_rate = (df['Success'].sum() / max(len(df), 1)) * 100
 col1.metric("Overall Success Rate", f"{success_rate:.1f}%")
-col2.metric("Avg Yards/Play", f"{df['Yards Gained'].mean():.1f}")
+col2.metric("Avg Yards / Play", f"{df['Yards Gained'].mean():.1f}")
+
+# Provide a quick best/worst formation snapshot
+formation_stats = df.groupby('Formation')['Success'].mean().sort_values(ascending=False)
+if not formation_stats.empty:
+    best = formation_stats.index[0]
+    worst = formation_stats.index[-1]
+    col3.metric("Best Formation", best, delta=f"{formation_stats.iloc[0]*100:.0f}%")
+else:
+    col3.metric("Best Formation", "N/A")
 
 # 4. Scheme Analysis (Charts)
 st.subheader("Scheme Efficiency by Formation")
-fig = px.bar(df.groupby('Formation')['Success'].mean().reset_index(), 
-             x='Formation', y='Success', color='Formation',
-             labels={'Success': 'Success %'}, height=300)
+form_success = (
+    df.groupby('Formation')['Success']
+    .mean()
+    .reset_index()
+    .rename(columns={'Success': 'SuccessPct'})
+)
+# convert to percent
+form_success['SuccessPct'] = form_success['SuccessPct'] * 100
+
+fig = px.bar(
+    form_success,
+    x='Formation',
+    y='SuccessPct',
+    color='Formation',
+    labels={'SuccessPct': 'Success %'},
+    height=300
+)
+fig.update_yaxes(range=[0, 100], ticksuffix='%')
 st.plotly_chart(fig, use_container_width=True)
 
 # 5. The "Film Table"
 st.subheader("Play-by-Play Review")
 # Filter by formation on mobile
-selected_form = st.selectbox("Filter by Formation", options=['All'] + list(df['Formation'].unique()))
+selected_form = st.selectbox("Filter by Formation", options=['All'] + sorted(df['Formation'].unique()))
 filtered_df = df if selected_form == 'All' else df[df['Formation'] == selected_form]
 
-# Displaying the data
-for index, row in filtered_df.iterrows():
-    with st.expander(f"{row['Formation']} - {row['Play Name']} ({'✅' if row['Success'] else '❌'})"):
-        st.write(f"**Situation:** {row['Down']} & {row['Distance']}")
-        st.write(f"**Gain:** {row['Yards Gained']} yards")
-        st.link_button("Watch Clip", row['Twitch_Link'])
+# Helper to render link/button compatibly across Streamlit versions
+def render_link(label: str, url: str):
+    if hasattr(st, "link_button"):
+        try:
+            st.link_button(label, url)
+            return
+        except Exception:
+            pass
+    # Fallback: render a markdown link (will open in same tab in many setups)
+    # Use an HTML anchor to try to open in a new tab if your Streamlit allows unsafe HTML
+    try:
+        st.markdown(f'<a href="{url}" target="_blank" rel="noopener noreferrer">{label}</a>', unsafe_allow_html=True)
+    except TypeError:
+        # older/newer streamlit may reject unsafe_allow_html param - fall back to plain markdown
+        st.markdown(f"[{label}]({url})")
 
+# Displaying the data (use itertuples for slightly better performance)
+for r in filtered_df.itertuples(index=False):
+    formation = getattr(r, "Formation", "")
+    # pandas converts invalid identifier chars (like spaces) to underscores for namedtuple fields
+    play_name = getattr(r, "Play_Name", getattr(r, "Play Name", ""))
+    success_sym = "✅" if getattr(r, "Success", False) else "❌"
+    down = getattr(r, "Down", "")
+    distance = getattr(r, "Distance", "")
+    yards = getattr(r, "Yards_Gained", getattr(r, "Yards Gained", ""))
+    link = getattr(r, "Twitch_Link", "")
+    with st.expander(f"{formation} - {play_name} ({success_sym})"):
+        st.write(f"**Situation:** {down} & {distance}")
+        st.write(f"**Gain:** {yards} yards")
+        render_link("Watch Clip", link)
